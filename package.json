@@ -1,0 +1,29 @@
+{
+	"name": "skroodle-server",
+	"version": "1.0.0",
+	"description": "",
+	"main": "app.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"start": "node --require dotenv/config ./dist/app.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Np463/skroodle-server.git"
+	},
+	"author": "",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/Np463/skroodle-server/issues"
+	},
+	"homepage": "https://github.com/Np463/skroodle-server#readme",
+	"dependencies": {
+		"dotenv": "^10.0.0",
+		"express": "^4.17.1",
+		"socket.io": "^4.1.2"
+	},
+	"devDependencies": {
+		"@types/express": "^4.17.12",
+		"@types/node": "^15.12.1"
+	}
+}
