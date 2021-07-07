@@ -5,7 +5,12 @@ let io: Server;
 
 export const Socket = {
 	init: (httpServer: http.Server) => {
-		io = new Server(httpServer);
+		io = new Server(httpServer, {
+			cors: {
+				origin: process.env.CLIENT_URL,
+				methods: ["GET", "POST"]
+			}
+		});
 		return io;
 	},
 	getIO: () => {
