@@ -1,15 +1,10 @@
-interface Lobby {
-	id: string,
-	owner: string
-}
-
 export class LobbyDatabase {
 	private static instance: LobbyDatabase;
 
-	private data: Map<string, Lobby>;
+	private data: Set<string>;
 
 	private constructor() {
-		this.data = new Map();
+		this.data = new Set();
 	}
 
 	public static getInstance(): LobbyDatabase {
@@ -19,8 +14,8 @@ export class LobbyDatabase {
 		return LobbyDatabase.instance;
 	}
 
-	public addLobby(id: string, owner: string): void {
-		this.data.set(id, {id, owner});
+	public addLobby(roomId: string): void {
+		this.data.add(roomId);
 	}
 
 	public has(roomId: string): boolean {
@@ -32,7 +27,7 @@ export class LobbyDatabase {
 		return this.data.delete(roomId);
 	}
 
-	public getAll(): Array<Lobby> {
+	public getAll(): Array<string> {
 		return Array.from(this.data.values());
 	}
 }
