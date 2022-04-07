@@ -3,6 +3,8 @@ import http from "http";
 import lobbyRoutes from "./routes/lobby";
 import { Socket } from "./services/socket";
 import { SessionStore } from "./services/session";
+import { LobbyDatabase } from "./services/lobby";
+import { GameService } from "./services/game";
 import { registerEvents } from "./events";
 import { v4 as uuid } from "uuid";
 
@@ -12,6 +14,8 @@ const app = express();
 const server = http.createServer(app);
 const io = Socket.init(server);
 const sessionStore = SessionStore.getInstance();
+const lobbyDatabase = LobbyDatabase.getInstance();
+const gameService = GameService.getInstance();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
