@@ -54,7 +54,54 @@ export default (socket: Socket) => {
 		game.setWord(word);
 	};
 
+	const canvasDraw = ({
+		roomId,
+		index,
+		point,
+	}: {
+		roomId: string;
+		index: number;
+		point: number[];
+	}) => {
+		var game = games.get(roomId);
+		if (
+			!game ||
+			game.getDrawer().data.sessionId !== socket.data.sessionId ||
+			game.getGameStateEnum() !== 3
+		)
+			return;
+		game.addCanvasPoint(index, point);
+		// socket.to(roomId).emit("game:addPoint", { index, point });
+	};
+
+	const clearCanvas = (roomId: string) => {
+		var game = games.get(roomId);
+		if (
+			!game ||
+			game.getDrawer().data.sessionId !== socket.data.sessionId ||
+			game.getGameStateEnum() !== 3
+		)
+			return;
+		game.clearCanvas();
+		io.in(roomId).emit("game:clearCanvas");
+	};
+
+	const undo = (roomId: string) => {
+		var game = games.get(roomId);
+		if (
+			!game ||
+			game.getDrawer().data.sessionId !== socket.data.sessionId ||
+			game.getGameStateEnum() !== 3
+		)
+			return;
+		game.undo();
+		io.in(roomId).emit("game:undo");
+	};
+
 	socket.on("lobby:startGame", startGame);
 	socket.on("game:getState", getState);
 	socket.on("game:chooseWord", chooseWord);
+	socket.on("game:canvasDraw", canvasDraw);
+	socket.on("game:clearCanvas", clearCanvas);
+	socket.on("game:undo", undo);
 };

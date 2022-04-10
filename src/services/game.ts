@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import { RemoteSocket, Socket } from "socket.io";
 import { DefaultEventsMap } from "socket.io/dist/typed-events";
+import { clearInterval } from "timers";
 import { Socket as SocketService } from "./socket";
 
 enum GameState {
@@ -15,7 +16,7 @@ enum GameState {
 // Stores data about a game. Round, Points, Chat?, Word, Timer, Drawer, Owner
 class Game {
 	private roomId: string;
-	private canvasPoints: number[] = [];
+	private canvasPoints: any;
 	private scoreboard: Map<string, number>;
 	private players: RemoteSocket<DefaultEventsMap>[];
 	private rounds: number;
@@ -34,6 +35,10 @@ class Game {
 
 	private roundTimer!: NodeJS.Timeout;
 
+	private pointsInterval!: NodeJS.Timeout;
+	private startIndex: number = -1;
+	private strokeStartIndex: number = -1;
+
 	public constructor(
 		roomId: string,
 		players: RemoteSocket<DefaultEventsMap>[],
@@ -43,6 +48,7 @@ class Game {
 	) {
 		this.roomId = roomId;
 		this.scoreboard = new Map<string, number>();
+		this.canvasPoints = new Array();
 		this.players = players;
 		this.rounds = rounds;
 		this.secondsPerRound = secondsPerRound;
@@ -87,7 +93,7 @@ class Game {
 				this.drawer = this.remainingDrawers.pop()!;
 				this.wordChoices = this.wordsList.getWords();
 
-				this.roundDueDate = Date.now() + 60 * 1000;
+				this.roundDueDate = Date.now() + 10 * 1000;
 
 				SocketService.getIO()
 					.in(this.roomId)
@@ -133,8 +139,41 @@ class Game {
 						this.processGame();
 					}
 				}, 100);
+				this.pointsInterval = setInterval(() => {
+					if (this.gameState !== GameState.TurnStart) return;
+					let endIndex = this.canvasPoints.length - 1;
+					let existingStroke = [];
+					let newPoints = [];
+					if (
+						this.startIndex > -1 &&
+						this.strokeStartIndex < this.canvasPoints[this.startIndex].length
+					) {
+						existingStroke = this.canvasPoints[this.startIndex].slice(
+							this.strokeStartIndex + 1
+						);
+						this.strokeStartIndex = this.canvasPoints[endIndex].length - 1;
+					}
+					if (this.startIndex < endIndex) {
+						newPoints = this.canvasPoints.slice(this.startIndex + 1);
+						this.startIndex = endIndex;
+						this.strokeStartIndex = this.canvasPoints[endIndex].length - 1;
+					}
+					if (existingStroke.length > 0 || newPoints.length > 0) {
+						SocketService.getIO()
+							.to(this.roomId)
+							.except(this.drawer.id)
+							.emit("game:addPoint", {
+								existingStroke: existingStroke,
+								newPoints: newPoints,
+							});
+					}
+				}, 1000);
 				break;
 			case GameState.TurnEnd:
+				clearInterval(this.pointsInterval);
+				this.canvasPoints = new Array();
+				this.startIndex = -1;
+				this.strokeStartIndex = -1;
 				this.roundDueDate = Date.now() + 5 * 1000;
 				SocketService.getIO().in(this.roomId).emit("game:turnEnd", {
 					word: this.word,
@@ -214,6 +253,35 @@ class Game {
 
 	public getGameStateEnum() {
 		return this.gameState;
+	}
+
+	public addCanvasPoint(index: number, point: number[]) {
+		if (!this.canvasPoints[index]) {
+			this.canvasPoints[index] = [point];
+		} else {
+			this.canvasPoints[index].push(point);
+		}
+	}
+
+	public clearCanvas() {
+		this.canvasPoints = [];
+		this.startIndex = -1;
+		this.strokeStartIndex = -1;
+	}
+
+	public undo() {
+		if (
+			this.startIndex >= 0 &&
+			this.startIndex === this.canvasPoints.length - 1
+		) {
+			this.startIndex--;
+			if (this.startIndex >= 0) {
+				this.strokeStartIndex = this.canvasPoints[this.startIndex].length - 1;
+			} else {
+				this.strokeStartIndex = -1;
+			}
+		}
+		this.canvasPoints.pop();
 	}
 }
 
