@@ -9,7 +9,7 @@ import { registerEvents } from "./events";
 import { v4 as uuid } from "uuid";
 import cors from "cors";
 
-const PORT: number = 8080;
+const PORT: number = 5000;
 
 const app = express();
 const server = http.createServer(app);
