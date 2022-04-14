@@ -5,7 +5,8 @@
 	"main": "app.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"start": "node --require dotenv/config ./dist/app.js"
+		"start": "node ./dist/app.js",
+		"build": "tsc -p ."
 	},
 	"repository": {
 		"type": "git",
@@ -18,7 +19,7 @@
 	},
 	"homepage": "https://github.com/Np463/skroodle-server#readme",
 	"dependencies": {
-		"dotenv": "^10.0.0",
+		"cors": "^2.8.5",
 		"express": "^4.17.1",
 		"socket.io": "^4.1.2",
 		"uuid": "^8.3.2"

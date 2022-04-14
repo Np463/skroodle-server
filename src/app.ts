@@ -7,8 +7,9 @@ import { LobbyDatabase } from "./services/lobby";
 import { GameService } from "./services/game";
 import { registerEvents } from "./events";
 import { v4 as uuid } from "uuid";
+import cors from "cors";
 
-const PORT: number = parseInt(process.env.PORT as string, 10) || 8080;
+const PORT: number = 8080;
 
 const app = express();
 const server = http.createServer(app);
@@ -20,12 +21,15 @@ const gameService = GameService.getInstance();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-app.use((req, res, next) => {
-	res.setHeader("Access-Control-Allow-Origin", "*");
-	res.setHeader("Access-Control-Allow-Methods", "GET, POST");
-	// res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-	next();
-});
+app.use(
+	cors({
+		origin: [
+			"http://localhost:3000",
+			"https://skroodle.io",
+			"https://skroodle.com",
+		],
+	})
+);
 
 app.use(lobbyRoutes);
 

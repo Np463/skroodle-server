@@ -4,6 +4,12 @@ import { DefaultEventsMap } from "socket.io/dist/typed-events";
 import { clearInterval } from "timers";
 import { Socket as SocketService } from "./socket";
 
+interface SocketData {
+	userId: string;
+	sessionId: string;
+	username: string;
+}
+
 enum GameState {
 	GameStart,
 	RoundSetup,
@@ -18,7 +24,7 @@ class Game {
 	private roomId: string;
 	private canvasPoints: any;
 	private scoreboard: Map<string, number>;
-	private players: RemoteSocket<DefaultEventsMap>[];
+	private players: RemoteSocket<DefaultEventsMap, SocketData>[];
 	private rounds: number;
 	private secondsPerRound: number;
 	private createdAt: number;
@@ -27,8 +33,8 @@ class Game {
 	private roundDueDate: number = 0;
 	private word: string = "";
 	private wordChoices: string[] = [];
-	private drawer!: RemoteSocket<DefaultEventsMap>;
-	private remainingDrawers: RemoteSocket<DefaultEventsMap>[] = [];
+	private drawer!: RemoteSocket<DefaultEventsMap, SocketData>;
+	private remainingDrawers: RemoteSocket<DefaultEventsMap, SocketData>[] = [];
 
 	private gameState: GameState;
 	private wordsList: WordsList;
@@ -41,7 +47,7 @@ class Game {
 
 	public constructor(
 		roomId: string,
-		players: RemoteSocket<DefaultEventsMap>[],
+		players: RemoteSocket<DefaultEventsMap, SocketData>[],
 		rounds: number,
 		secondsPerRound: number,
 		wordList: WordsList
@@ -167,7 +173,7 @@ class Game {
 								newPoints: newPoints,
 							});
 					}
-				}, 1000);
+				}, 100);
 				break;
 			case GameState.TurnEnd:
 				clearInterval(this.pointsInterval);
@@ -225,7 +231,7 @@ class Game {
 		this.processGame();
 	}
 
-	public getDrawer(): RemoteSocket<DefaultEventsMap> {
+	public getDrawer(): RemoteSocket<DefaultEventsMap, SocketData> {
 		return this.drawer;
 	}
 
@@ -332,7 +338,7 @@ export class GameService {
 
 	public createGame(
 		roomId: string,
-		players: RemoteSocket<DefaultEventsMap>[],
+		players: RemoteSocket<DefaultEventsMap, SocketData>[],
 		rounds: number,
 		secondsPerRound: number
 	): void {

@@ -7,9 +7,13 @@ export const Socket = {
 	init: (httpServer: http.Server) => {
 		io = new Server(httpServer, {
 			cors: {
-				origin: process.env.CLIENT_URL,
-				methods: ["GET", "POST"]
-			}
+				origin: [
+					"http://localhost:3000",
+					"https://skroodle.io",
+					"https://skroodle.com",
+				],
+				methods: ["GET", "POST"],
+			},
 		});
 		return io;
 	},
