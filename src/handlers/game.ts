@@ -98,10 +98,36 @@ export default (socket: Socket) => {
 		io.in(roomId).emit("game:undo");
 	};
 
+	const sendChatMessage = (roomId: string, message: string) => {
+		var game = games.get(roomId);
+		if (!game) return;
+		if (
+			game.getGameStateEnum() === 3 &&
+			game.getDrawer().data.sessionId === socket.data.sessionId
+		)
+			return;
+		if (
+			game.getGameStateEnum() === 3 &&
+			!game.hasGuessedCorrectly(socket.data.userId) &&
+			game.guessWord(message, socket)
+		) {
+			io.in(roomId).emit("game:sendChatMessage", {
+				type: "correct_guess",
+				message: `${socket.data.username} guessed correctly!`,
+			});
+		} else {
+			io.in(roomId).emit("game:sendChatMessage", {
+				username: socket.data.username,
+				message: message,
+			});
+		}
+	};
+
 	socket.on("lobby:startGame", startGame);
 	socket.on("game:getState", getState);
 	socket.on("game:chooseWord", chooseWord);
 	socket.on("game:canvasDraw", canvasDraw);
 	socket.on("game:clearCanvas", clearCanvas);
 	socket.on("game:undo", undo);
+	socket.on("game:sendChatMessage", sendChatMessage);
 };

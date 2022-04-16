@@ -24,6 +24,7 @@ class Game {
 	private roomId: string;
 	private canvasPoints: any;
 	private scoreboard: Map<string, number>;
+	private correctGuesses: Map<string, number>;
 	private players: RemoteSocket<DefaultEventsMap, SocketData>[];
 	private rounds: number;
 	private secondsPerRound: number;
@@ -54,6 +55,8 @@ class Game {
 	) {
 		this.roomId = roomId;
 		this.scoreboard = new Map<string, number>();
+		players.forEach((p) => this.scoreboard.set(p.data.userId, 0));
+		this.correctGuesses = new Map<string, number>();
 		this.canvasPoints = new Array();
 		this.players = players;
 		this.rounds = rounds;
@@ -67,6 +70,10 @@ class Game {
 	private async processGame() {
 		switch (this.gameState) {
 			case GameState.GameStart:
+				SocketService.getIO().in(this.roomId).emit("game:sendChatMessage", {
+					type: "server",
+					message: "Game starting...",
+				});
 				this.roundDueDate = Date.now() + 1.5 * 1000;
 				this.roundTimer = setInterval(() => {
 					if (Date.now() >= this.roundDueDate) {
@@ -86,11 +93,18 @@ class Game {
 					break;
 				}
 				this.currentRound++;
+				SocketService.getIO()
+					.in(this.roomId)
+					.emit("game:sendChatMessage", {
+						type: "server",
+						message: `Round ${this.currentRound}...`,
+					});
 				this.remainingDrawers = [...this.players];
 				this.gameState = GameState.TurnSetup;
 				this.processGame();
 				break;
 			case GameState.TurnSetup:
+				this.correctGuesses.clear();
 				if (this.remainingDrawers.length === 0) {
 					this.gameState = GameState.RoundEnd;
 					this.processGame();
@@ -100,7 +114,12 @@ class Game {
 				this.wordChoices = this.wordsList.getWords();
 
 				this.roundDueDate = Date.now() + 10 * 1000;
-
+				SocketService.getIO()
+					.in(this.roomId)
+					.emit("game:sendChatMessage", {
+						type: "server",
+						message: `${this.drawer.data.username} is choosing a word...`,
+					});
 				SocketService.getIO()
 					.in(this.roomId)
 					.emit("game:choosingWord", {
@@ -180,12 +199,47 @@ class Game {
 				this.canvasPoints = new Array();
 				this.startIndex = -1;
 				this.strokeStartIndex = -1;
-				this.roundDueDate = Date.now() + 5 * 1000;
+
+				let drawerScore =
+					500 *
+					(this.correctGuesses.size / Math.max(1, this.scoreboard.size - 1));
+				this.correctGuesses.set(this.drawer.data.userId, drawerScore);
+				this.correctGuesses.forEach((val, key) => {
+					if (!this.scoreboard.has(key)) this.scoreboard.set(key, 0);
+					this.scoreboard.set(key, this.scoreboard.get(key)! + val);
+				});
+
+				this.players.forEach((p) => {
+					if (!this.correctGuesses.has(p.data.userId)) {
+						this.correctGuesses.set(p.data.userId, 0);
+					}
+				});
+
+				let userIdToName = new Map();
+				this.players.forEach((p) => {
+					userIdToName.set(p.data.userId, p.data.username);
+				});
+				let turnScores = Array.from(this.correctGuesses.entries());
+				turnScores = turnScores.map((ts) => {
+					let username = userIdToName.get(ts[0]);
+					return [username, ts[1]];
+				});
+				let scores = Array.from(this.scoreboard.entries());
+				scores = scores.map((ts) => {
+					let username = userIdToName.get(ts[0]);
+					return [username, ts[1]];
+				});
+
+				this.roundDueDate = Date.now() + 8 * 1000;
+
 				SocketService.getIO().in(this.roomId).emit("game:turnEnd", {
 					word: this.word,
 					dueDate: this.roundDueDate,
 					gameState: this.gameState,
+					turnScores: turnScores,
+					scoreboard: scores,
 				});
+
 				this.roundTimer = setInterval(() => {
 					if (Date.now() >= this.roundDueDate) {
 						clearInterval(this.roundTimer);
@@ -236,8 +290,17 @@ class Game {
 	}
 
 	public getGameState() {
+		let userIdToName = new Map();
+		this.players.forEach((p) => {
+			userIdToName.set(p.data.userId, p.data.username);
+		});
+		let scores = Array.from(this.scoreboard.entries());
+		scores = scores.map((ts) => {
+			let username = userIdToName.get(ts[0]);
+			return [username, ts[1]];
+		});
 		return {
-			scoreboard: Array.from(this.scoreboard.entries()),
+			scoreboard: scores,
 			canvasPoints: this.canvasPoints,
 			players: this.players.map((s) => ({
 				userId: s.data.userId,
@@ -288,6 +351,29 @@ class Game {
 			}
 		}
 		this.canvasPoints.pop();
+	}
+
+	public guessWord(
+		message: string,
+		socket: Socket<DefaultEventsMap, SocketData>
+	): boolean {
+		if (message.toLowerCase() === this.word.toLowerCase()) {
+			let percentOfTimeLeft =
+				(this.roundDueDate - Date.now()) / 1000 / this.secondsPerRound;
+			let points = 50 + Math.ceil(500 * percentOfTimeLeft);
+			if (this.correctGuesses.size === 0) points += 100;
+			this.correctGuesses.set(socket.data.userId, points);
+			if (this.correctGuesses.size === this.scoreboard.size - 1) {
+				this.roundDueDate = Date.now();
+			}
+			return true;
+		}
+		return false;
+	}
+
+	public hasGuessedCorrectly(userId: string): boolean {
+		if (this.correctGuesses.has(userId)) return true;
+		return false;
 	}
 }
 
