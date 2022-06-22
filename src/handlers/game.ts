@@ -29,7 +29,7 @@ export default (socket: Socket) => {
 				const game = games.get(roomId)!;
 				var gameState = game.getGameState();
 				if (
-					game.getDrawer()?.data.sessionId !== socket.data.sessionId &&
+					game.getDrawer() !== socket.data.sessionId &&
 					game.getGameStateEnum() === 3
 				) {
 					let hiddenWord = gameState.word
@@ -48,8 +48,7 @@ export default (socket: Socket) => {
 
 	const chooseWord = (roomId: string, word: number) => {
 		var game = games.get(roomId);
-		if (!game || game.getDrawer().data.sessionId !== socket.data.sessionId)
-			return;
+		if (!game || game.getDrawer() !== socket.data.sessionId) return;
 		if (word < 0 || word > 2) return;
 		game.setWord(word);
 	};
@@ -66,7 +65,7 @@ export default (socket: Socket) => {
 		var game = games.get(roomId);
 		if (
 			!game ||
-			game.getDrawer().data.sessionId !== socket.data.sessionId ||
+			game.getDrawer() !== socket.data.sessionId ||
 			game.getGameStateEnum() !== 3
 		)
 			return;
@@ -78,7 +77,7 @@ export default (socket: Socket) => {
 		var game = games.get(roomId);
 		if (
 			!game ||
-			game.getDrawer().data.sessionId !== socket.data.sessionId ||
+			game.getDrawer() !== socket.data.sessionId ||
 			game.getGameStateEnum() !== 3
 		)
 			return;
@@ -90,7 +89,7 @@ export default (socket: Socket) => {
 		var game = games.get(roomId);
 		if (
 			!game ||
-			game.getDrawer().data.sessionId !== socket.data.sessionId ||
+			game.getDrawer() !== socket.data.sessionId ||
 			game.getGameStateEnum() !== 3
 		)
 			return;
@@ -103,7 +102,7 @@ export default (socket: Socket) => {
 		if (!game) return;
 		if (
 			game.getGameStateEnum() === 3 &&
-			game.getDrawer().data.sessionId === socket.data.sessionId
+			game.getDrawer() === socket.data.sessionId
 		)
 			return;
 		if (

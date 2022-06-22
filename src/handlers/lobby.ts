@@ -2,11 +2,13 @@ import { Socket } from "socket.io";
 import { LobbyDatabase } from "../services/lobby";
 import { Socket as SocketService } from "../services/socket";
 import { SessionStore } from "../services/session";
+import { GameService } from "../services/game";
 
 export default (socket: Socket) => {
 	const lobbies = LobbyDatabase.getInstance();
 	const io = SocketService.getIO();
 	const sessions = SessionStore.getInstance();
+	const games = GameService.getInstance();
 
 	const createLobby = () => {
 		let lobby = lobbies.createLobby(socket.data.sessionId);
@@ -21,23 +23,39 @@ export default (socket: Socket) => {
 	const joinLobby = async ({ roomId }: any) => {
 		if (!roomId) return;
 		if (lobbies.has(roomId)) {
-			// Check if there is another socket in the room with the same sessionId
 			const sockets = await io.in(roomId).fetchSockets();
-			if (sockets) {
-				for (const s of sockets) {
-					if (s.data.sessionId === socket.data.sessionId) {
-						return socket.emit("lobby:error", {
-							error: "You are already connected to this room on another tab",
-						});
-					}
+			for (let s of sockets) {
+				if (s.data.sessionId === socket.data.sessionId) {
+					return socket.emit("lobby:error", {
+						error: "You are already connected to this room on another tab",
+					});
 				}
 			}
-			let lobby = lobbies.get(roomId)!;
 			socket.join(roomId);
+			let lobby = lobbies.get(roomId)!;
+			let inProgress = false;
+			if (games.has(roomId)) {
+				let game = games.get(roomId)!;
+				let players = game.getPlayers();
+				let newPlayer = true;
+				for (let p of players) {
+					if (p.data.sessionId === socket.data.sessionId) {
+						newPlayer = false;
+					}
+				}
+				let player = await io.in(socket.id).fetchSockets();
+				if (newPlayer) {
+					game.addPlayer(player[0]);
+				} else {
+					game.updatePlayerSocket(player[0]);
+				}
+				inProgress = true;
+			}
 			socket.emit("lobby:createdOrJoined", {
 				roomId: roomId,
 				rounds: lobby.rounds,
 				secondsPerRound: lobby.secondsPerRound,
+				inProgress: inProgress,
 			});
 			socket.to(roomId).emit("player:connected", {
 				userId: socket.data.userId,

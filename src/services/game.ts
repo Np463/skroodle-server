@@ -4,7 +4,7 @@ import { DefaultEventsMap } from "socket.io/dist/typed-events";
 import { clearInterval } from "timers";
 import { Socket as SocketService } from "./socket";
 
-interface SocketData {
+export interface SocketData {
 	userId: string;
 	sessionId: string;
 	username: string;
@@ -25,7 +25,7 @@ class Game {
 	private canvasPoints: any;
 	private scoreboard: Map<string, number>;
 	private correctGuesses: Map<string, number>;
-	private players: RemoteSocket<DefaultEventsMap, SocketData>[];
+	private players: Map<string, RemoteSocket<DefaultEventsMap, SocketData>>;
 	private rounds: number;
 	private secondsPerRound: number;
 	private createdAt: number;
@@ -34,8 +34,8 @@ class Game {
 	private roundDueDate: number = 0;
 	private word: string = "";
 	private wordChoices: string[] = [];
-	private drawer!: RemoteSocket<DefaultEventsMap, SocketData>;
-	private remainingDrawers: RemoteSocket<DefaultEventsMap, SocketData>[] = [];
+	private drawer: string = "";
+	private remainingDrawers: string[] = [];
 
 	private gameState: GameState;
 	private wordsList: WordsList;
@@ -55,10 +55,16 @@ class Game {
 	) {
 		this.roomId = roomId;
 		this.scoreboard = new Map<string, number>();
-		players.forEach((p) => this.scoreboard.set(p.data.userId, 0));
+		this.players = new Map<
+			string,
+			RemoteSocket<DefaultEventsMap, SocketData>
+		>();
+		players.forEach((p) => {
+			this.scoreboard.set(p.data.userId, 0);
+			this.players.set(p.data.sessionId, p);
+		});
 		this.correctGuesses = new Map<string, number>();
 		this.canvasPoints = new Array();
-		this.players = players;
 		this.rounds = rounds;
 		this.secondsPerRound = secondsPerRound;
 		this.createdAt = Date.now();
@@ -99,7 +105,7 @@ class Game {
 						type: "server",
 						message: `Round ${this.currentRound}...`,
 					});
-				this.remainingDrawers = [...this.players];
+				this.remainingDrawers = Array.from(this.players.keys());
 				this.gameState = GameState.TurnSetup;
 				this.processGame();
 				break;
@@ -111,6 +117,7 @@ class Game {
 					break;
 				}
 				this.drawer = this.remainingDrawers.pop()!;
+				let drawerSocket = this.players.get(this.drawer)!;
 				this.wordChoices = this.wordsList.getWords();
 
 				this.roundDueDate = Date.now() + 10 * 1000;
@@ -118,20 +125,20 @@ class Game {
 					.in(this.roomId)
 					.emit("game:sendChatMessage", {
 						type: "server",
-						message: `${this.drawer.data.username} is choosing a word...`,
+						message: `${drawerSocket.data.username} is choosing a word...`,
 					});
 				SocketService.getIO()
 					.in(this.roomId)
 					.emit("game:choosingWord", {
 						drawer: {
-							userId: this.drawer.data.userId,
-							username: this.drawer.data.username,
+							userId: drawerSocket.data.userId,
+							username: drawerSocket.data.username,
 						},
 						dueDate: this.roundDueDate,
 						round: this.currentRound,
 						gameState: this.gameState,
 					});
-				this.drawer.emit("game:wordChoices", this.wordChoices);
+				drawerSocket.emit("game:wordChoices", this.wordChoices);
 
 				this.roundTimer = setInterval(() => {
 					if (Date.now() >= this.roundDueDate) {
@@ -156,7 +163,8 @@ class Game {
 					dueDate: this.roundDueDate,
 					gameState: this.gameState,
 				});
-				this.drawer.emit("game:selectedWord", this.word);
+				let drawer = this.players.get(this.drawer)!;
+				drawer.emit("game:selectedWord", this.word);
 				this.roundTimer = setInterval(() => {
 					if (Date.now() >= this.roundDueDate) {
 						clearInterval(this.roundTimer);
@@ -169,6 +177,7 @@ class Game {
 					let endIndex = this.canvasPoints.length - 1;
 					let existingStroke = [];
 					let newPoints = [];
+					drawer = this.players.get(this.drawer)!;
 					if (
 						this.startIndex > -1 &&
 						this.strokeStartIndex < this.canvasPoints[this.startIndex].length
@@ -186,7 +195,7 @@ class Game {
 					if (existingStroke.length > 0 || newPoints.length > 0) {
 						SocketService.getIO()
 							.to(this.roomId)
-							.except(this.drawer.id)
+							.except(drawer.id)
 							.emit("game:addPoint", {
 								existingStroke: existingStroke,
 								newPoints: newPoints,
@@ -199,11 +208,11 @@ class Game {
 				this.canvasPoints = new Array();
 				this.startIndex = -1;
 				this.strokeStartIndex = -1;
-
+				let drawerSock = this.players.get(this.drawer)!;
 				let drawerScore =
 					500 *
 					(this.correctGuesses.size / Math.max(1, this.scoreboard.size - 1));
-				this.correctGuesses.set(this.drawer.data.userId, drawerScore);
+				this.correctGuesses.set(drawerSock.data.userId, drawerScore);
 				this.correctGuesses.forEach((val, key) => {
 					if (!this.scoreboard.has(key)) this.scoreboard.set(key, 0);
 					this.scoreboard.set(key, this.scoreboard.get(key)! + val);
@@ -285,7 +294,7 @@ class Game {
 		this.processGame();
 	}
 
-	public getDrawer(): RemoteSocket<DefaultEventsMap, SocketData> {
+	public getDrawer(): string {
 		return this.drawer;
 	}
 
@@ -299,20 +308,21 @@ class Game {
 			let username = userIdToName.get(ts[0]);
 			return [username, ts[1]];
 		});
+		let drawer = this.players.get(this.drawer);
 		return {
 			scoreboard: scores,
 			canvasPoints: this.canvasPoints,
-			players: this.players.map((s) => ({
+			players: Array.from(this.players.values()).map((s) => ({
 				userId: s.data.userId,
 				username: s.data.username,
 			})),
 			rounds: this.rounds,
 			currentRound: this.currentRound,
 			dueDate: this.roundDueDate,
-			drawer: this.drawer
+			drawer: drawer
 				? {
-						userId: this.drawer.data.userId,
-						username: this.drawer.data.username,
+						userId: drawer.data.userId,
+						username: drawer.data.username,
 				  }
 				: null,
 			word: this.word,
@@ -374,6 +384,21 @@ class Game {
 	public hasGuessedCorrectly(userId: string): boolean {
 		if (this.correctGuesses.has(userId)) return true;
 		return false;
+	}
+
+	public addPlayer(socket: RemoteSocket<DefaultEventsMap, SocketData>): void {
+		this.players.set(socket.data.sessionId, socket);
+		this.scoreboard.set(socket.data.userId, 0);
+	}
+
+	public updatePlayerSocket(
+		socket: RemoteSocket<DefaultEventsMap, SocketData>
+	): void {
+		this.players.set(socket.data.sessionId, socket);
+	}
+
+	public getPlayers(): RemoteSocket<DefaultEventsMap, SocketData>[] {
+		return Array.from(this.players.values());
 	}
 }
 
